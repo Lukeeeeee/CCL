@@ -1,0 +1,2 @@
+TARGET = CCL
+OBJECT = main.o ccl_cpu.o ccl_gpu.o util.o

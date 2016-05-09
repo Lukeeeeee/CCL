@@ -1,0 +1,1 @@
+int get_prefix_sum(int w, int h, int *label, unsigned char *img, unsigned char byF);
