@@ -40,40 +40,99 @@ reserved
 #include <algorithm>
 
 #include "ccl_gpu.cuh"
+#include "common.cu"
 
-#define CUDA_CALL(x) {const cudaError_t a = (x);if (a != cudaSuccess) { printf("\nCuda error: %s (err_num = %d)\n",cudaGetErrorString(a),a);cudaDeviceReset();}}
-#define MAX_HEIGHT 1024
-#define MAX_WIDTH 1024
-//#define MAX_VERTEX MAX_WIDTH * MAX_HEIGHT
 
-#define INT_PTR(x) (*((int*)(&(x))))
-
-__device__ int dx[8] = {-1,0,1,-1,1,-1,0,1};
-__device__ int dy[8] = {-1,-1,-1,0,0,1,1,1};
-
-__device__ int get_loc() {
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	int idy = blockIdx.y * blockDim.y + threadIdx.y;
-	return gridDim.x * blockDim.x * idy +idx;
+__global__ void init_label(int w, int h, int *d_label) {
+	int loc = get_loc();
+	if(loc>=w*h) return;
+	d_label[loc] = loc;
 }
 
-__device__ int get_x() {
-	return blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void init_flag(bool *d_flag) {
+	*d_flag = 0;
 }
 
-__device__ int get_y() {
-	return blockIdx.y * blockDim.y + threadIdx.y;
+__device__ int find(int loc, int *d_label) {
+	int temp = loc;
+	while(temp != d_label[temp]) temp = d_label[temp];
+	int ans = temp;
+	temp = loc;
+	while(temp != ans) {
+		temp = d_label[temp];
+		d_label[temp] = ans;
+	}
+	return ans;
 }
 
-__device__ bool check_bound(int x, int y, int w, int h) {
-	if (x>0&&y>0&&x<w&&y<h) return 1;
-		else return 0;
+__global__ void ccl_find(int w, int h, unsigned char *img, unsigned char byF, int *d_label, int *d_flag) {
+	int loc = get_loc();
+	int x = get_x();
+	int y = get_y();
+
+	if(loc>=w*h) return;
+
+	int min_label = w*h+1;
+
+	for(int i=0;i<8;i++) {
+		xx = x + dx[i];
+		yy = y + dy[i];
+		if(check_connect(xx+yy*w)) {
+			min_label = min(min_label, find(xx+yy*w, d_label));
+		}
+	}
+
+	//__syncthreads();
+
+	if(min_label<d_label[loc]) {
+		d_label[loc] = min_label;
+		*d_flag = 1;
+	}
 }
 
+__global__ void set_image(int w, int h, unsigned char *img, unsigned char byF, int *imgOut) {
+	int loc = get_loc();
+	if(loc>=w*h||img[loc]!=byF) return;
+	INT_PTR(imgOut[loc]) = find(loc);
+}
 
 int gpuLabelImage(int w, int h, int ws, int wd, unsigned char *img, int *imgOut, unsigned char byF,int *numLabels)
 {
 
+	bool flag = 0;
+
+
+	int *d_label;
+	int *d_fa;
+	int *d_flag;
+
+
+
+	cudaMalloc(&d_label, sizeof(int)*w*h);
+	cudaMalloc(&d_fa, sizeof(int)*w*h);
+	cudaMalloc(&d_flag, sizeof(bool));
+
+	const threads_pre_blocks = 256; 
+	int blocks_pre_row = w/;
+	if(w%threads_pre_blocks) blocks_pre_row++
+	const dim3 init_flag_blocks_rect(blocks_pre_row,h,1);
+	const dim3 init_flag_threads_rect(threads_pre_blocks,1,1);
+
+	const dim3 ccl_find_blocks_rect(blocks_pre_row,h,1);
+	const dim3 ccl_find_threads_rect(threads_pre_blocks,1,1);
+
+	const dim3 set_image_blocks_rect(blocks_pre_row,h,1);
+	const dim3 set_image_threads_rect(threads_pre_blocks,1,1);
+
+	init_label<<<init_flag_blocks_rect,init_flag_threads_rect>>>(w,h,d_label);
+
+	do {
+		init_flag<<<1,1>>>(d_flag);
+		ccl_find<<<ccl_find_blocks_rect,ccl_find_threads_rect>>>(w,h,img,byF,d_label,d_flag);
+		cudaMemcpy(&flag,d_flag,sizeof(bool),cudaMemcpyDeviceToHost);
+		}while(flag)
+	}
+	set_image<<<>>>(w,h,img,byf,imgOut);
 
 	return 0;
 	
