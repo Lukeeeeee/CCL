@@ -52,11 +52,18 @@ reserved
 __device__ int dx[8] = {-1,0,1,-1,1,-1,0,1};
 __device__ int dy[8] = {-1,-1,-1,0,0,1,1,1};
 
-__device__ int get_loc() {
+__device__ int get_loc(int w, int h) {
+	
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	int idy = blockIdx.y * blockDim.y + threadIdx.y;
-	return gridDim.x * blockDim.x * idy +idx;
-}
+	if(idx>=w||idy>=h) {
+		//printf("yes\n");
+		return w*h+1;
+	} else {
+		int loc = w * idy +idx;
+	return loc;
+	}
+} 
 
 __device__ int get_x() {
 	return blockIdx.x * blockDim.x + threadIdx.x;
@@ -78,7 +85,7 @@ __device__ void add_vertex(int loc1, int loc2, int *d_vertex) {
 
 
 __global__ void get_vertex(int w, int h, int *d_vertex, unsigned char *img, unsigned char byF) {
-	int loc = get_loc();
+	int loc = get_loc(w,h);
 	int i;
 	int x = get_x();
 	int y = get_y();
@@ -92,13 +99,13 @@ __global__ void get_vertex(int w, int h, int *d_vertex, unsigned char *img, unsi
 }
 
 __global__ void init_label(int w, int h, int *label) {
-	int loc = get_loc();
+	int loc = get_loc(w,h);
 	if(loc>=w*h) return;
 	label[loc] = loc;
 }
 
 __global__ void CCL(int w, int h, int *d_label, int *d_vertex, bool *d_flag, int *d_flag_1, int *d_flag_2) {
-	int loc = get_loc();
+	int loc = get_loc(w,h);
 	int i,j;
 	int col_i,col_j;
 
@@ -127,20 +134,19 @@ __global__ void CCL(int w, int h, int *d_label, int *d_vertex, bool *d_flag, int
 }
 
 __global__ void get_label_num(int w, int h, unsigned char *img, int *d_label, unsigned char byF, int *d_lable_num) {
-	int loc = get_loc();
+	int loc = get_loc(w,h);
 	if(loc>=w*h) return;
 	if(img[loc] == byF && d_label[loc] == loc) {
 		atomicAdd(d_lable_num, 1);	
 	}
-
 }
 __global__ void set_image(int w, int h, unsigned char *img, int *d_label, int *imgOut, unsigned char byF, int *d_lable_num) {
-	int loc = get_loc();
+	int loc = get_loc(w,h);
 	if(loc>=w*h) return;
 	if (img[loc] == byF){
 		INT_PTR(imgOut[loc]) = d_label[loc];
 		if(d_label[loc] == loc) {
-			printf("!! %d\n",loc);
+			//printf("!! %d\n",loc);
 			atomicAdd(d_lable_num, 1);
 		}
 	}
@@ -187,34 +193,23 @@ int gpuLabelImage(int w, int h, int ws, int wd, unsigned char *img, int *imgOut,
 	cudaMemset(d_flag_1, 1, sizeof(int)*MAX_VERTEX);
 	//cudaMemset(d_flag_2, 0, sizeof(int)*MAX_VERTEX);
 	
-	const dim3 get_vertex_blocks_rect(1,h);
-	const dim3 get_vertex_threads_rect(w,1);
-	//const dim3 get_vertex_blocks_rect(w/32+1,h/32+1);
-	//const dim3 get_vertex_threads_rect(32,32);
-
-
-	const dim3 init_label_blocks_rect(1,h);
-	const dim3 init_label_threads_rect(w,1);
-	//const dim3 init_label_blocks_rect(w/32+1,h/32+1);
-	//const dim3 init_label_threads_rect(32,32);
-
-	const dim3 ccl_blocks_rect(1,h);
-	const dim3 ccl_threads_rect(w,1);
-	//const dim3 ccl_blocks_rect(w/32+1,h/32+1);
-	//const dim3 ccl_threads_rect(32,32);
-
-
-	const dim3 set_image_blocks_rect(1,h);
-	const dim3 set_image_threads_rect(w,1);
-	//const dim3 set_image_blocks_rect(w/32+1,h/32+1);
-	//const dim3 set_image_threads_rect(32,32);
-
-
-	const dim3 get_label_num_blocks_rect(1,h);
-	const dim3 get_label_num_threads_rect(w,1);
-	//const dim3 get_label_num_blocks_rect(w/32+1,h/32+1);
-	//const dim3 get_label_num_threads_rect(32,32);
 	
+	const int threads_pre_blocks = 256; 
+	int blocks_pre_row = w/threads_pre_blocks;
+	if(w%threads_pre_blocks) blocks_pre_row++;
+	
+
+	const dim3 get_vertex_blocks_rect(blocks_pre_row,h,1);
+	const dim3 get_vertex_threads_rect(threads_pre_blocks,1,1);
+
+	const dim3 init_label_blocks_rect(blocks_pre_row,h,1);
+	const dim3 init_label_threads_rect(threads_pre_blocks,1,1);
+
+	const dim3 ccl_blocks_rect(blocks_pre_row,h,1);
+	const dim3 ccl_threads_rect(threads_pre_blocks,1,1);
+
+	const dim3 set_image_blocks_rect(blocks_pre_row,h,1);
+	const dim3 set_image_threads_rect(threads_pre_blocks,1,1);
 	
 	get_vertex<<<get_vertex_blocks_rect, get_vertex_threads_rect>>>(w,h,d_vertex,img,byF);
 	

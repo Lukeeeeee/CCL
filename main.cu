@@ -33,7 +33,7 @@ int main(int argc, const char* argv[])
 
     /* Word processing */
     cudaError_t cudaStatus; 
-	char* inputfile = "4.bmp"; //input file name
+	char* inputfile = "3_21.bmp"; //input file name
 	char* cpu_outputfile = "cpu.bmp"; //output file name of CPU alg
 	char* gpu_outputfile = "gpu.bmp"; //output file name of GPU alg
 	getCmdLineArgumentString(argc, argv, "infile", &inputfile); 
