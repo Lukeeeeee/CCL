@@ -94,42 +94,44 @@ __global__ void init_flag(bool *d_flag) {
 	*d_flag = 0;
 }
 
-__device__ int find(int loc, int *d_label, bool *d_flag) {
-	int temp = loc;
-	if(temp==d_label[temp]) return temp;
-	while(temp != d_label[temp]) temp = d_label[temp];
-	int ans = temp;
-	temp = loc;
-	while(temp != ans) {
-		temp = d_label[temp];
-		d_label[temp] = ans;
+__device__ int find_min_label(int w, int h, int x, int y, int dir, unsigned char *img, unsigned char byF) {
+	int xx = x + dx[i];
+	int yy = y + dy[i];
+	int min_lable = w*h+1;
+	while(check_bound(xx,yy,w,h)&&img[xx+yy*w]==byF){
+		min_label = min(min_label, d_label[xx+yy*w]);
+		xx = xx + dx[i];
+		yy = yy + dy[i];
 	}
-	*d_flag = 1;
-	return ans;
+	return min_label;
 }
 
 __global__ void ccl_find(int w, int h, unsigned char *img, unsigned char byF, int *d_label, int *d_fa, bool *d_flag) {
 	int loc = get_loc(w,h);
 	int x = get_x();
 	int y = get_y();
-	int xx,yy;
-
+	int temp;
 	if(loc>=w*h||img[loc]!=byF) return;
 
 	int min_label = w*h+1;
 
 	for(int i=0;i<8;i++) {
+		tmep = find_min_label(w,h,x,y,i,img,byF);
+		if(temp<min_label) min_label = temp;
+	}	
+	/*
+	for(int i=0;i<8;i++) {
 		xx = x + dx[i];
 		yy = y + dy[i];
 		if(check_bound(xx,yy,w,h)&&img[xx+yy*w]==byF) {
 			//int temp = find(xx+yy*w,d_label,d_flag);
-			int temp = d_label[xx+yy*w];
+			temp = d_label[xx+yy*w];
 			//printf("x %d y %d temp %d min_temp %d\n",xx,yy,temp,min_label);
 			if(temp<min_label) min_label = temp;
 			//min_label = min(min_label, find(xx+yy*w, d_label));
 		}
 	}
-
+	*/
 	//__syncthreads();
 	//printf("min %d loc %d\n",min_label,d_label[loc]);
 	if(min_label<d_label[loc]) {
