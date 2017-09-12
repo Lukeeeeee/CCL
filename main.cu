@@ -21,7 +21,7 @@ The output of the system is a bmp image with 24bit true color image for verifica
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "util.cuh"
-#include "ccl_cpu.cuh" 
+#include "cpu/ccl_cpu.cuh"
 #include "ccl_gpu.cuh"
 #include <stdio.h>
 #include <math.h>
